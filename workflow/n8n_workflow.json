@@ -1,0 +1,168 @@
+{
+    "name": "Case 39A",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "energy-consumption",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "id": "1a417786-d620-40c1-a33a-43d46aaaa01d",
+        "name": "Webhook",
+        "webhookId": "bdb3f55a-472d-46a8-8c7b-a61835eb91fa",
+        "notesInFlow": false
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT cl.name, AVG(er.consumption) AS average_consumption\nFROM clients cl\nJOIN contracts ct ON ct.client_id = cl.id\nJOIN energy_readings er ON er.contract_id = ct.id\nWHERE ct.is_active = TRUE \n  AND er.reading_date > CURRENT_DATE - INTERVAL '3 months'\nGROUP BY cl.name;",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          200,
+          0
+        ],
+        "id": "cbe3af12-bbc8-42f9-95c7-07174b3e2847",
+        "name": "Postgres",
+        "credentials": {
+          "postgres": {
+            "id": "2LH4EIr9u9e7L6ny",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "language": "python",
+          "pythonCode": "import statistics\n\nitems = _input.all()\nvalues = [float(item.json[\"average_consumption\"]) for item in items]\n\nmean = statistics.mean(values)\nstddev = statistics.pstdev(values)\n\nfor item in items:\n    cons = float(item.json[\"average_consumption\"])\n    item.json[\"status\"] = \"outlier\" if abs(cons - mean) > stddev else \"normal\"\n\nreturn items\n # o código acima considera uma pessoa com consumo 'outlier' se este (cos) menos a média geral(mean) ainda for maior que o desvio padrão (stddev). Senão, o consumo é considerado 'normal'"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          380,
+          0
+        ],
+        "id": "e948e6ca-0b4f-4fae-a2ca-d2e156205fb0",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "GPT-4O-MINI"
+          },
+          "messages": {
+            "values": [
+              {
+                "content": "=Você é responsável por fazer relatórios breves e objetivos sobre o consumo energético de clientes.\n",
+                "role": "system"
+              },
+              {
+                "content": "={{ JSON.stringify($items(\"Code\").map(item => item.json), null, 2) }}\n"
+              }
+            ]
+          },
+          "simplify": false,
+          "jsonOutput": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 1.8,
+        "position": [
+          560,
+          0
+        ],
+        "id": "445209cc-cd14-4d3b-bddc-e8d260a2d3c3",
+        "name": "OpenAI",
+        "credentials": {
+          "openAiApi": {
+            "id": "naUgumEBhPQGVKnL",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $node[\"OpenAI\"].json[\"choices\"][0].message.content }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          900,
+          0
+        ],
+        "id": "84d7329e-fd78-4345-96f5-66fd3ef3c2b1",
+        "name": "Respond to Webhook"
+      }
+    ],
+    "pinData": {},
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Postgres",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Postgres": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "OpenAI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": true,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "versionId": "7e0c05e3-56d3-4ccc-ba86-447ffe7498cb",
+    "meta": {
+      "templateCredsSetupCompleted": true,
+      "instanceId": "94c9195254175aa81d4548c1c525159d6ea43421620a6548c0181ba9d03f0417"
+    },
+    "id": "p7vSyb8wErVjwvUW",
+    "tags": []
+  }
